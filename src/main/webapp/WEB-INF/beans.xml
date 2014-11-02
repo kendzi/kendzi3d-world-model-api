@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<beans xmlns="http://www.springframework.org/schema/beans"
+	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" 
+	xmlns:jaxrs="http://cxf.apache.org/jaxrs"
+	xmlns:context="http://www.springframework.org/schema/context"
+	xsi:schemaLocation="http://www.springframework.org/schema/beans  http://www.springframework.org/schema/beans/spring-beans-3.0.xsd 
+		http://www.springframework.org/schema/context http://www.springframework.org/schema/context/spring-context-3.0.xsd 
+		http://cxf.apache.org/jaxrs http://cxf.apache.org/schemas/jaxrs.xsd">
+	
+	<import resource="classpath:META-INF/cxf/cxf.xml" />
+	<import resource="swagger.xml" />
+	
+	<context:property-placeholder />
+	<context:annotation-config />
+	<context:component-scan base-package="kendzi.kendzi3d.service.viewer.service"/>
+
+
+	<bean id="centerQuadModelService" class="kendzi.kendzi3d.service.viewer.service.CenterQuadModelService" />
+
+	<bean id="textureFacade" class="kendzi.kendzi3d.service.viewer.facade.TextureFacadeImpl" />
+	<bean id="quadFacade" class="kendzi.kendzi3d.service.viewer.facade.QuadFacadeImpl" />
+	
+	
+	<bean class="org.springframework.web.context.support.ServletContextPropertyPlaceholderConfigurer" />
+
+	<bean class="org.springframework.beans.factory.config.PreferencesPlaceholderConfigurer" />
+
+	<bean id="jacksonMapper" class="kendzi.kendzi3d.service.viewer.json.CustomObjectMapper"/>
+
+	<bean id="jsonProvider" class="com.fasterxml.jackson.jaxrs.json.JacksonJsonProvider" >
+       <property name="mapper" ref="jacksonMapper" />
+   	</bean>
+
+	<jaxrs:server id="services" address="/">
+		<jaxrs:serviceBeans>					
+			<ref bean="textureFacade" />
+			<ref bean="quadFacade" />
+			<ref bean="textureFacade" />
+			<ref bean="swaggerApiDoc" />
+		</jaxrs:serviceBeans>
+		<jaxrs:providers>
+			<ref bean="resourceWriter" />
+			<ref bean="apiWriter" />
+			<ref bean="jsonProvider" />
+		</jaxrs:providers>
+	</jaxrs:server>
+</beans>

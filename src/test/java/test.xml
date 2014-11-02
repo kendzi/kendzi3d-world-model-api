@@ -1,0 +1,18 @@
+
+<osm-script>
+	<union>
+		<query type="node">
+			<bbox-query s="52.14020654685293" w="15.7627576264103" n="52.14021345314708"
+				e="15.7634023735897" />
+		</query>
+		<query type="way">
+			<bbox-query s="52.14020654685293" w="15.7627576264103" n="52.14021345314708"
+				e="15.7634023735897" />
+		</query>
+		<query type="relation">
+			<bbox-query s="52.14020654685293" w="15.7627576264103" n="52.14021345314708"
+				e="15.7634023735897" />
+		</query>
+	</union>
+	<print limit="" mode="meta" order="id" />
+</osm-script>

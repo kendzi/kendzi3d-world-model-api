@@ -1,0 +1,45 @@
+{
+	"version" : "0.0.1",
+	"vertex" : [
+		10, 0, 0,
+		20, 0, 0,
+		20, 0, 10,
+		10, 0, 10],
+	"normals" : [
+		0, 1, 0,
+		0, 1, 0,
+		0, 1, 0,
+		0, 1, 0],
+	"textureCoords" : [
+		[
+			0, 0, 
+			1, 0, 
+			1, 1,
+			0, 1
+		],
+		[	
+			0, 0, 
+			1, 0, 
+			1, 1,
+			0, 1]],
+	"faces" : [	
+		{
+			"material" : {
+				"texture" : "earth.jpg",
+				"ambient" : "#000000",
+				"diffuse" : {
+					"type" : "multi-layer",
+					"color" : "#ff0000",
+					"texture0" : "layerTest0.png",
+					"texture1" : "layerTest1.png"
+				},
+				"specular" : "#000000",
+				"shininess" : 5
+			},
+			"indexes" : [
+				0, 1, 2,
+				2, 3, 0
+			]
+		}
+	]
+}

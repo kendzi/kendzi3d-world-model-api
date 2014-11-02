@@ -1,0 +1,474 @@
+<html>
+
+<head>
+<title>WebGl Kendzi3d</title>
+<meta http-equiv="content-type" content="text/html; charset=ISO-8859-1">
+
+<script type="text/javascript" src="js/glMatrix-0.9.5.min.js"></script>
+<script type="text/javascript" src="js/webgl-utils.js"></script>
+<script type="text/javascript" src="js/jquery-1.10.2.js"></script>
+
+<script type="text/javascript" src="kendzi3d-render.js"></script>
+<script type="text/javascript" src="kendzi3d-quad-render.js"></script>
+<script type="text/javascript" src="kendzi3d-rotating-camera.js"></script>
+<script type="text/javascript" src="queryString.js"></script>
+<script type="text/javascript" src="kendzi3d-shader-util.js"></script>
+
+
+<script>
+  (function(i,s,o,g,r,a,m){i['GoogleAnalyticsObject']=r;i[r]=i[r]||function(){
+  (i[r].q=i[r].q||[]).push(arguments)},i[r].l=1*new Date();a=s.createElement(o),
+  m=s.getElementsByTagName(o)[0];a.async=1;a.src=g;m.parentNode.insertBefore(a,m)
+  })(window,document,'script','//www.google-analytics.com/analytics.js','ga');
+
+  ga('create', 'UA-51744903-1', 'openstreetmap.pl');
+  ga('send', 'pageview');
+
+</script>
+
+<script type="text/javascript">
+
+    var gl;
+
+    function initGL(canvas) {
+        try {
+            gl = canvas.getContext("experimental-webgl");
+            gl.viewportWidth = canvas.width;
+            gl.viewportHeight = canvas.height;
+        } catch (e) {
+        }
+        if (!gl) {
+            alert("Could not initialise WebGL, sorry :-(");
+        }
+    }
+
+    function handleLoadedTexture(texture) {
+        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+        gl.bindTexture(gl.TEXTURE_2D, texture);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, texture.image);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+        gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_NEAREST);
+        gl.generateMipmap(gl.TEXTURE_2D);
+
+        gl.bindTexture(gl.TEXTURE_2D, null);
+    }
+ 
+    var mvMatrix = mat4.create();
+    var mvMatrixStack = [];
+    var pMatrix = mat4.create();
+
+    function mvPushMatrix() {
+        var copy = mat4.create();
+        mat4.set(mvMatrix, copy);
+        mvMatrixStack.push(copy);
+    }
+
+    function mvPopMatrix() {
+        if (mvMatrixStack.length == 0) {
+            throw "Invalid popMatrix!";
+        }
+        mvMatrix = mvMatrixStack.pop();
+    }
+
+    function setMatrixUniforms() {
+        gl.uniformMatrix4fv(quadRender.kendziRender.shaderProgram.pMatrixUniform, false, pMatrix);
+        gl.uniformMatrix4fv(quadRender.kendziRender.shaderProgram.mvMatrixUniform, false, mvMatrix);
+
+        var normalMatrix = mat3.create();
+        mat4.toInverseMat3(mvMatrix, normalMatrix);
+        mat3.transpose(normalMatrix);
+        gl.uniformMatrix3fv(quadRender.kendziRender.shaderProgram.nMatrixUniform, false, normalMatrix);
+    }
+
+    function degToRad(degrees) {
+        return degrees * Math.PI / 180;
+    }
+
+
+  
+    
+    function loadQuad() {
+    	
+    	var q = QueryString;
+    	var lat = q.lat;
+    	var lon = q.lon;
+    	var size = q.size;
+    	
+    	if (!lat || !lon || !size) {
+    		alert("bad request parameters, using default ones.")
+    		lat="52.14021";
+    		lon="15.76308";
+    		size="44";
+    	}
+    	
+    	var params = "lat=" + lat + "&lon=" +lon + "&size=" + size;
+    	
+    	var urlFactory = {
+    			getTextureUrl : function(key) {
+    				return "api/texture?key=" + encodeURIComponent(key);
+    			},
+    	};
+    	
+        var request = new XMLHttpRequest();
+        request.open("GET", "api/quad?" + params);
+        request.onreadystatechange = function () {
+            if (request.readyState == 4) { 
+            	try {
+          		  	var text = request.responseText;
+            	 
+          		  	model = quadRender.loadQuad(JSON.parse(text), urlFactory);
+          		  	
+          		  	logQuadData(quadRender);
+          		  	
+
+          	        document.getElementById("loadingtext").textContent = "";
+            	} catch (e) {
+            		alert(e);
+            		throw e;
+            	}
+            }
+        }
+        request.send();
+    }
+
+
+    function logQuadData(quadrender) {
+    	var indexesCount = 0;
+    	var vertexCount = 0;
+    	var log = "";
+    	
+    	for (var i = 0; i < quadrender.models.length; i++) {
+    		var model = quadrender.models[i].model;
+    		
+    		for (var m = 0; m < model.length; m++) {
+    			vertexCount += model[m].vertexBuffer.numItems;
+    			for (var f = 0; f < model[m].faces.length; f++) {
+    				var face = model[m].faces[f];
+		    		var item = "models["+i+"], model["+m+"], faces["+f+"]: indexes: " +  face.indexBuffer.numItems;
+		    		indexesCount += face.indexBuffer.numItems;
+		    		
+		    		if (face.material.diffuse) {
+		    			item += ", diffuse";
+		    			if (face.material.diffuse.texture0) {
+		    				item += ", txt0: " + face.material.diffuse.texture0.image.src;		    				
+		    			}
+		    			if (face.material.diffuse.color) {
+		    				item += ", color: " + face.material.diffuse.color;		    				
+		    			}
+		    		}
+		    		
+		    		log += "<li>" + item + "</li>";
+    			}
+    		}
+    	}
+    	var log = "models: " + quadrender.models.length 
+    		+ " total vertex count: " + vertexCount
+    		+ " total index count: " + indexesCount
+    		+  "<ul>" + log +  "</ul>";
+    	
+		document.getElementById("log").innerHTML = log;
+    }
+    var model = null;
+
+    var teapotAngle = 180;
+
+    var lastFpsCount = 0;
+    var lastFpsTime = 0;
+
+    function drawScene() {
+    	
+    	try {
+        gl.viewport(0, 0, gl.viewportWidth, gl.viewportHeight);
+        gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+
+
+        mat4.perspective(45, gl.viewportWidth / gl.viewportHeight, 0.1, 500.0, pMatrix);
+
+        var specularHighlights = document.getElementById("specular").checked;
+        gl.uniform1i(quadRender.kendziRender.shaderProgram.showSpecularHighlightsUniform, specularHighlights);
+
+        var lighting = document.getElementById("lighting").checked;
+        gl.uniform1i(quadRender.kendziRender.shaderProgram.useLightingUniform, lighting);
+        if (lighting) {
+            gl.uniform3f(
+                quadRender.kendziRender.shaderProgram.ambientColorUniform,
+                parseFloat(document.getElementById("ambientR").value),
+                parseFloat(document.getElementById("ambientG").value),
+                parseFloat(document.getElementById("ambientB").value)
+            );
+
+            gl.uniform3f(
+                quadRender.kendziRender.shaderProgram.pointLightingLocationUniform,
+                parseFloat(document.getElementById("lightPositionX").value),
+                parseFloat(document.getElementById("lightPositionY").value),
+                parseFloat(document.getElementById("lightPositionZ").value)
+            );
+
+            gl.uniform3f(
+                quadRender.kendziRender.shaderProgram.pointLightingSpecularColorUniform,
+                parseFloat(document.getElementById("specularR").value),
+                parseFloat(document.getElementById("specularG").value),
+                parseFloat(document.getElementById("specularB").value)
+            );
+
+            gl.uniform3f(
+                quadRender.kendziRender.shaderProgram.pointLightingDiffuseColorUniform,
+                parseFloat(document.getElementById("diffuseR").value),
+                parseFloat(document.getElementById("diffuseG").value),
+                parseFloat(document.getElementById("diffuseB").value)
+            );
+        }
+
+        var texture = document.getElementById("texture").value;
+        gl.uniform1i(quadRender.kendziRender.shaderProgram.useTexture0Uniform, texture != "none");
+
+//         mat4.identity(mvMatrix);
+//XXX
+//         mat4.translate(mvMatrix, [0, -30, -140]);
+//         mat4.rotate(mvMatrix, degToRad(15), [1, 0, 0]);
+//         mat4.rotate(mvMatrix, degToRad(teapotAngle), [0, 1, 0]);
+
+        mvMatrix = camera.matrix();
+        
+        gl.activeTexture(gl.TEXTURE0);
+        
+        gl.uniform1i(quadRender.kendziRender.shaderProgram.samplerUniform0, 0);
+        gl.uniform1i(quadRender.kendziRender.shaderProgram.samplerUniform1, 1);
+
+        gl.uniform1f(quadRender.kendziRender.shaderProgram.materialShininessUniform, parseFloat(document.getElementById("shininess").value));
+ 
+        setMatrixUniforms(); 
+
+        quadRender.render(mvMatrix );
+    	} catch (e) {
+    		alert(e);
+    		throw e;
+    	}
+    }
+    
+    function fps() {
+    	
+    	lastFpsCount++;
+    	
+        var timeNow = new Date().getTime();
+        if (timeNow - lastFpsTime > 1000) {
+        	
+        	document.getElementById("fps").textContent = "Fps: " + lastFpsCount;
+        	lastFpsCount = 0;
+        	lastFpsTime = timeNow;
+        }
+    }
+
+
+    function tick() {
+        requestAnimFrame(tick); 
+        drawScene();
+        animate();
+        fps();
+    }
+
+
+    function webGLStart() {
+    	quadRender = new Kendzi3dQuadRender();
+    	camera = new KendziRotatingCamera();
+    	
+        var canvas = document.getElementById("kendzi3d-canvas");
+        initGL(canvas);
+        quadRender.kendziRender.initShaders();
+ 
+ 
+		loadQuad();
+		
+        gl.clearColor(0, 0, 0, 1.0);
+ 
+        gl.enable(gl.DEPTH_TEST);
+        
+        gl.enable(gl.BLEND);
+       // gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+
+        canvas.onmousedown = function(e) { handleMouseDown(e);};
+        document.onmouseup = function(e) { handleMouseUp(e);};
+        document.onmousemove = function(e) { return handleMouseMove(e);};
+        //canvas.onmousewheel = function(e) {handleMouseWheel(e);};
+        canvas.onwheel = function(e) {return handleMouseWheel(e);};
+//         canvas.addEventListener('mousewheel',function(e) {handleMouseWheel(e)}, false);
+//         canvas.addEventListener('wheel',function(e) {handleMouseWheel(e)}, false);
+        
+        tick();
+    }
+    
+
+    var lastTime = 0;
+	var cameraAngleX = 0;
+	var cameraAngleY = 10;
+	
+    function animate() {
+    	
+    	this.camera.animate();
+    	
+        var timeNow = new Date().getTime();
+        if (lastTime != 0) {
+            var elapsed = timeNow - lastTime;
+
+            teapotAngle += 0.05 * elapsed;
+        }
+        lastTime = timeNow;
+    }
+    
+	var mouseDown = false;
+	var lastMouseX = null;
+	var lastMouseY = null;
+
+	function handleMouseDown(event) {
+		mouseDown = true;
+		lastMouseX = event.clientX;
+		lastMouseY = event.clientY;
+		
+		this.camera.isAnimated = false;
+	}
+
+	function handleMouseUp(event) {
+		mouseDown = false;
+	}
+
+	function handleMouseMove(event) {
+		if (!mouseDown) {
+			return;
+		}
+		var newX = event.clientX;
+		var newY = event.clientY;
+
+		var deltaX = newX - lastMouseX;
+		var deltaY = newY - lastMouseY;
+		 
+		this.camera.rotate(deltaX/5, deltaY/5);
+		
+		lastMouseX = newX
+		lastMouseY = newY;
+	}
+	
+	function handleMouseWheel(e) {
+		var delta = Math.max(-1, Math.min(1, (e.deltaY || e.wheelDelta || -e.detail)));
+		this.camera.zoom(delta * 10);
+		return false;
+	}
+
+	function canvasResize(size) {
+		var canvas = document.getElementById("kendzi3d-canvas");
+		canvas.width = size;
+		canvas.height = size;
+		gl.viewportWidth = size;
+		gl.viewportHeight = size;
+	}
+</script>
+
+
+<style type="text/css">
+    #loadingtext {
+        position:absolute;
+        top:250px;
+        left:150px;
+        font-size:2em;
+        color: white;
+    }
+    
+   	.hidden {
+    	display: none;
+  	}
+</style>
+
+
+</head>
+
+
+<body onload="webGLStart();">
+    <a href="index.html">Back to map</a><br />
+
+    <canvas id="kendzi3d-canvas" style="border: none;" width="500" height="500"></canvas>
+
+    <div id="loadingtext">Loading world...</div>
+    <br/>
+    <a href="javascript:canvasResize(128)">128x128</a>
+    <a href="javascript:canvasResize(256)">256x256</a>
+    <a href="javascript:canvasResize(512)">512x512</a>
+    <div id="fps"></div>
+    
+    <div>
+    	<button id="show_log" >Show models details</button>
+		<div id="log" class="hidden"></div>
+    </div>
+     
+	<div>
+    	<button id="show_settings">Show settings</button>
+		<div id="settings" class="hidden">
+		
+		    <input type="checkbox" id="specular" checked /> Show specular highlight<br/>
+		    <input type="checkbox" id="lighting" checked /> Use lighting<br/>
+		
+		    Texture:
+		    <select id="texture">
+		        <option value="none">None</option>
+		        <option selected value="galvanized">Galvanized</option>
+		        <option value="earth">Earth</option>
+		    </select>
+		    <br/>
+		
+		
+		    <h2>Material:</h2>
+		
+		    <table style="border: 0; padding: 10px;">
+		        <tr>
+		            <td><b>Shininess:</b>
+		            <td><input type="text" id="shininess" value="32.0" />
+		        </tr>
+		    </table>
+		
+		
+		    <h2>Point light:</h2>
+		
+		    <table style="border: 0; padding: 10px;">
+		        <tr>
+		            <td><b>Location:</b>
+		            <td>X: <input type="text" id="lightPositionX" value="-10.0" />
+		            <td>Y: <input type="text" id="lightPositionY" value="4.0" />
+		            <td>Z: <input type="text" id="lightPositionZ" value="-20.0" />
+		        </tr>
+		        <tr>
+		            <td><b>Specular colour:</b>
+		            <td>R: <input type="text" id="specularR" value="0.8" />
+		            <td>G: <input type="text" id="specularG" value="0.8" />
+		            <td>B: <input type="text" id="specularB" value="0.8" />
+		        </tr>
+		        <tr>
+		            <td><b>Diffuse colour:</b>
+		            <td>R: <input type="text" id="diffuseR" value="0.8" />
+		            <td>G: <input type="text" id="diffuseG" value="0.8" />
+		            <td>B: <input type="text" id="diffuseB" value="0.8" />
+		        </tr>
+		    </table>
+		
+		
+		    <h2>Ambient light:</h2>
+		
+		    <table style="border: 0; padding: 10px;">
+		        <tr>
+		            <td><b>Colour:</b>
+		            <td>R: <input type="text" id="ambientR" value="0.2" />
+		            <td>G: <input type="text" id="ambientG" value="0.2" />
+		            <td>B: <input type="text" id="ambientB" value="0.2" />
+		        </tr>
+		    </table> 
+		</div>
+    </div>
+    
+</body>
+<script>
+$( "#show_log" ).click(function() {
+	$( "#log" ).toggle( "slow" );
+});
+$( "#show_settings" ).click(function() {
+	$( "#settings" ).toggle( "slow" );
+});
+</script>
+</html>
